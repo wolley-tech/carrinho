@@ -1,2 +1,2 @@
-# loja
-Microservice de loja online
+# Carrinho
+Microservice de exemplo - loja online
