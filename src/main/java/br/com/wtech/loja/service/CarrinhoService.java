@@ -13,6 +13,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+import java.util.concurrent.CompletableFuture;
+
 @Service
 public class CarrinhoService {
     private final String pagamentoUrl;
@@ -34,7 +36,31 @@ public class CarrinhoService {
 
         PagamentoRequest pagamentoRequest = new PagamentoRequest(total, carrinhoDTO.getCartao());
 
-        ResponseEntity<Void> responsePagamento = restClient.post()
+        CompletableFuture<ResponseEntity<Void>> asyncPagamento = requestAsyncPagamento(pagamentoRequest);
+
+        asyncPagamento.thenAccept(response -> {
+            if (response.getStatusCode().is2xxSuccessful()) {
+                System.out.println("Pagamento Realizado com sucesso");
+            } else {
+                System.out.println("Pagamento Negado");
+            }
+        });
+
+
+        return ResponseEntity
+                .status(HttpStatus.PAYMENT_REQUIRED)
+                .body(new CheckoutResponseDTO("O Pagamento será processado"));
+    }
+
+
+    /**
+     * Realiza uma requisição de forma assincrona
+     *
+     * @param pagamentoRequest
+     * @return
+     */
+    private CompletableFuture<ResponseEntity<Void>> requestAsyncPagamento(PagamentoRequest pagamentoRequest) {
+        return CompletableFuture.supplyAsync(() -> restClient.post()
                 .uri("/pagamentos")
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(pagamentoRequest)
@@ -42,22 +68,7 @@ public class CarrinhoService {
                 .onStatus(HttpStatusCode::is4xxClientError, ((request, response) -> {
                     //throws
                 }))
-                .toBodilessEntity();
-
-        if (responsePagamento.getStatusCode().is2xxSuccessful()) {
-            return ResponseEntity
-                    .ok(new CheckoutResponseDTO("Pagamento Realizado com sucesso"));
-        }
-
-        if (responsePagamento.getStatusCode().is4xxClientError()) {
-            return ResponseEntity
-                    .status(HttpStatus.FORBIDDEN)
-                    .body(new CheckoutResponseDTO("Pagamento não autorizado"));
-        }
-
-        return ResponseEntity
-                .status(HttpStatus.BAD_REQUEST)
-                .body(new CheckoutResponseDTO("Não foi possível realizar o checkout"));
+                .toBodilessEntity());
     }
 
     /**
