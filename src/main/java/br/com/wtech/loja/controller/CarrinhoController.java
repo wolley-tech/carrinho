@@ -20,6 +20,6 @@ public class CarrinhoController {
 
     @PostMapping("/checkout")
     public ResponseEntity<CheckoutResponseDTO> checkout(@RequestBody CarrinhoDTO carrinhoDTO){
-        return ResponseEntity.ok(service.checkout(carrinhoDTO));
+        return service.checkout(carrinhoDTO);
     }
 }
