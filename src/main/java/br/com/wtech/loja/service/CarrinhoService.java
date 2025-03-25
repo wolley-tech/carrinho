@@ -4,6 +4,8 @@ package br.com.wtech.loja.service;
 import br.com.wtech.loja.dto.CarrinhoDTO;
 import br.com.wtech.loja.dto.CheckoutResponseDTO;
 import br.com.wtech.loja.dto.pagamento.PagamentoRequest;
+import br.com.wtech.loja.dto.pagamento.PagamentoResponse;
+import br.com.wtech.loja.model.Pedido;
 import br.com.wtech.loja.model.Produto;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -19,31 +21,40 @@ import java.util.concurrent.CompletableFuture;
 public class CarrinhoService {
     private final String pagamentoUrl;
     private final ProdutoService produtoService;
+    private final PedidoService pedidoService;
     private final RestClient restClient;
 
     public CarrinhoService(@Value("${pagamento.url}") String pagamentoUrl,
-                           ProdutoService produtoService) {
+                           ProdutoService produtoService,
+                           PedidoService pedidoService) {
         this.pagamentoUrl = pagamentoUrl;
         this.produtoService = produtoService;
+        this.pedidoService = pedidoService;
         this.restClient = RestClient.builder()
                 .baseUrl(pagamentoUrl)
                 .build();
     }
 
     public ResponseEntity<CheckoutResponseDTO> checkout(CarrinhoDTO carrinhoDTO) {
+        //calcula o total
+        var total = getTotal(carrinhoDTO);
 
-        Double total = getTotal(carrinhoDTO);
+        //cria um pedido
+        var pedido = pedidoService.criar(carrinhoDTO.getCartao().getTitular(),
+                total,
+                PedidoStatusEnum.PENDENTE);
 
-        PagamentoRequest pagamentoRequest = new PagamentoRequest(total, carrinhoDTO.getCartao());
+        var pagamentoRequest = new PagamentoRequest(pedido.getId(), pedido.getTotal(), carrinhoDTO.getCartao());
 
-        CompletableFuture<ResponseEntity<Void>> asyncPagamento = requestAsyncPagamento(pagamentoRequest);
+        CompletableFuture<ResponseEntity<PagamentoResponse>> asyncPagamento = requestAsyncPagamento(pagamentoRequest);
 
         asyncPagamento.thenAccept(response -> {
             if (response.getStatusCode().is2xxSuccessful()) {
-                System.out.println("Pagamento Realizado com sucesso");
+               pedidoService.atualizaStatus(response.getBody().getId(), PedidoStatusEnum.CONFIRMADO);
             } else {
-                System.out.println("Pagamento Negado");
+                pedidoService.atualizaStatus(response.getBody().getId(), PedidoStatusEnum.NEGADO);
             }
+            System.out.println("Pedido processado...");
         });
 
 
@@ -59,18 +70,17 @@ public class CarrinhoService {
      * @param pagamentoRequest
      * @return
      */
-    private CompletableFuture<ResponseEntity<Void>> requestAsyncPagamento(PagamentoRequest pagamentoRequest) {
+    private CompletableFuture<ResponseEntity<PagamentoResponse>> requestAsyncPagamento(PagamentoRequest pagamentoRequest) {
         return CompletableFuture.supplyAsync(() -> restClient.post()
                 .uri("/pagamentos")
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(pagamentoRequest)
-                .retrieve()
-                .onStatus(HttpStatusCode::is4xxClientError, ((request, response) -> {
-                    //throws
-                }))
-                .toBodilessEntity());
+                .exchange((request, response) -> {
+                    HttpStatusCode statusCode = response.getStatusCode();
+                    PagamentoResponse body = response.bodyTo(PagamentoResponse.class);
+                    return ResponseEntity.status(statusCode).body(body);
+                }));
     }
-
     /**
      * Calcula o total da compra multiplicando o valor do produto pela quantidade.
      *
