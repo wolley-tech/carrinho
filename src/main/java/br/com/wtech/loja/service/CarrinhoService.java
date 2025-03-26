@@ -34,7 +34,7 @@ public class CarrinhoService {
 
 
         return ResponseEntity
-                .status(HttpStatus.PAYMENT_REQUIRED)
+                .status(HttpStatus.OK)
                 .body(new CheckoutResponseDTO("O Pagamento será processado"));
     }
 

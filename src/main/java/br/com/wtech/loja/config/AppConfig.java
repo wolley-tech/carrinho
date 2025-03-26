@@ -21,6 +21,7 @@ public class AppConfig {
     private String queueName;
 
     public static final String topicExchangeName = "loja-exchange";
+    public static final String routingKey = "loja.pagamentos";
 
     @Bean
     public Queue queue() {
@@ -34,7 +35,7 @@ public class AppConfig {
 
     @Bean
     Binding binding(Queue queue, TopicExchange exchange) {
-        return BindingBuilder.bind(queue).to(exchange).with("loja.#");
+        return BindingBuilder.bind(queue).to(exchange).with(routingKey);
     }
 
     @Bean

@@ -13,7 +13,7 @@ public class SenderService {
 
 
     public void enviar(PagamentoRequest pagamentoRequest) {
-        rabbitTemplate.convertAndSend(AppConfig.topicExchangeName, "loja.pagamento", pagamentoRequest);
+        rabbitTemplate.convertAndSend(AppConfig.topicExchangeName, AppConfig.routingKey, pagamentoRequest);
     }
 
 
